@@ -1,24 +1,22 @@
-from wxpy3d import PointWindow
+from wxpy3d import Window
 from OpenGL.GL import *
+from OpenGL.GLUT import *
 from rtmodel import mesh
 from rtmodel import camera
 from wxpy3d.opengl_state import opengl_state
 
 if not 'window' in globals():
-    window = PointWindow(size=(640,480))#, pos=(20,20))
-    window.rotangles[0] = 20
-    print """
-    Demo Objrender:
-        refresh()
-        load_obj(): select a random object and load it
-    """
+    #window = CameraWindow(size=(1920,1080))
+    window = Window(size=(1024,768))
+    glutInit()
+    window.ShowFullScreen(True)
+
 
 def load_obj(name='gamecube'):
     global obj
 
     window.canvas.SetCurrent()
     obj = mesh.load(name)
-
     obj.RT = np.eye(4, dtype='f')
     obj.RT[:3,3] = -obj.vertices[:,:3].mean(0)
 
@@ -50,8 +48,9 @@ def stop():
 anim_angle = 0.0
 @window.eventx
 def EVT_IDLE(evt):
+    global anim_angle
     if is_animating:
-        anim_angle += 0.03 
+        anim_angle += 0.005
         window.Refresh()
 
 # Render the mesh before drawing points
@@ -59,7 +58,6 @@ def EVT_IDLE(evt):
 def on_draw():
 
     camera = None
-    proj = lambda mode: make_projection(camera, mode)
 
     class NoDraw: draw = lambda _: None
 
@@ -70,68 +68,28 @@ def on_draw():
 
         glClearColor(0,0,0,0)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+        proj_matrix, model_matrix = make_projection(camera, mode)
         glMatrixMode(GL_PROJECTION)
-        glLoadMatrixf(proj(mode))
+        glLoadMatrixf(proj_matrix.transpose())
         glMatrixMode(GL_MODELVIEW)
-        glLoadIdentity()
+        glLoadMatrixf(model_matrix.transpose())
 
-        if 1:
-            with opengl_state():
-                stereo_image.draw(dict(left='left', right='right',
-                                       center='right')[mode])
-        with opengl_state(): draw_thing()
+        with opengl_state(): 
+            draw_thing()
         
-    if glGetInteger(GL_STEREO):
+    if 1 and glGetInteger(GL_STEREO):
         render('left')
         render('right')
     else:
         render('center')
 
 
-class SplitImage:
-    def __init__(self, filename):
-        self.filename = filename
-
-    def __load__(self):
-        import pygame
-        filename = self.filename
-        imgsurf = pygame.image.load(filename)
-        imgstring = pygame.image.tostring(imgsurf, "RGBA", 1)
-        width, height = imgsurf.get_size()
-        texid = glGenTextures(1)
-        glBindTexture(GL_TEXTURE_RECTANGLE, texid)
-        glTexImage2D(GL_TEXTURE_RECTANGLE, 0, GL_RGBA, width, height, 0,
-                     GL_RGBA, GL_UNSIGNED_BYTE, imgstring)
-        self.texid = texid
-        self.size = width, height
-
-    def draw(self, mode):
-        assert mode in ('left','right')
-
-        if not 'texid' in dir(self):
-            self.__load__()
-
-        glBindTexture(GL_TEXTURE_RECTANGLE, self.texid)
-        glEnable(GL_TEXTURE_RECTANGLE)
-
-        w,h = self.size
-        L = dict(left=0, right=w/2)[mode]
-        glBegin(GL_QUADS)
-        glTexCoord(L+0,  0); glVertex(-1,-1)
-        glTexCoord(L+0,  h); glVertex(-1, 1)
-        glTexCoord(L+w/2,h); glVertex( 1, 1)
-        glTexCoord(L+w/2,0); glVertex( 1,-1)
-        glEnd()
-
-    def __del__(self):
-        glDeleteTextures([self.texid])
-
-stereo_image = SplitImage('data/reflect.jpg')
-
 def draw_thing():
+
     global obj
     if not 'obj' in globals():
         load_obj()
+        window.canvas.SetCurrent()
         window.Refresh()
 
     glLightfv(GL_LIGHT0, GL_POSITION, (-40, 200, 100, 0.0))
@@ -144,21 +102,49 @@ def draw_thing():
     glEnable(GL_DEPTH_TEST)
     glShadeModel(GL_SMOOTH)
 
+    # glRotate for pitch down and rotation
+    glRotate(-20*1, 1,0,0)
+    glRotate(np.rad2deg(anim_angle), 0,1,0)
+    glScale(-0.33,0.33,0.33)
+    obj.draw()
+
 
 def make_projection(camera, mode):
     assert mode in ('left','right','center')
-    # Copy the matrix projection mode given camera parameters
-    return np.eye(4)
 
-@window.event
-def post_draw():
-    glScale(-1,1,1)
-    # glRotate for pitch down and rotation
-    glRotate(np.rad2deg(anim_angle), 0,1,0)
-    obj.draw()
-    glScale(-1,1,1)
-    glDisable(GL_LIGHTING)
-    glColor(1,1,1,1)
+    # Copy the matrix projection mode given camera parameters
+    eyesep = 0.063       # Average adult eyes are 60mm apart
+    width = 0.736        # Width of the projection image (m)
+    focal_length = 1.5   # Distance to the projection image (m)
+    ratio = 1920 / 1080. # Width / height
+    #ratio = 1024 / 768. # Width / height
+
+    far = 10
+    near = 0.5  # Near plane is half meter in front of eyes
+    tan_ap = 0.5 * width / focal_length
+    wd2 = near * tan_ap
+    ndfl = near / focal_length
+
+    offsetx = dict(left=-1,right=1,center=0)[mode] * 0.5 * eyesep
+
+    left  = - ratio * wd2 + offsetx * ndfl
+    right =   ratio * wd2 + offsetx * ndfl
+    top    =   wd2
+    bottom = - wd2
+
+    with opengl_state():
+        glMatrixMode(GL_PROJECTION)
+        glLoadIdentity()
+        glFrustum(left, right, bottom, top, near, far)
+        projection = glGetFloatv(GL_PROJECTION_MATRIX).transpose()
+
+        glMatrixMode(GL_MODELVIEW)
+        glLoadIdentity()
+        glTranslate(offsetx,0,-focal_length)
+        glRotate(180, 0,1,0)
+        modelview = glGetFloatv(GL_MODELVIEW_MATRIX).transpose()
+
+    return projection, modelview
 
 
 window.Refresh()

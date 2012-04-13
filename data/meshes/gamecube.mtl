@@ -1,0 +1,16 @@
+#Materials exported from Google Sketchup
+
+newmtl __Textile_Leaves_Green__papermodel_gamecube_blue_1__jpg
+   Ka 0.000000 0.000000 0.000000
+   Kd   1.0000   1.0000   1.0000
+   Tr 1.0
+   Ks 0.000000 0.000000 0.000000
+   Ns   3.2000
+   map_Kd papermodel_gamecube_blue[1].jpg
+
+newmtl Default_Material 
+Ka 0.000000 0.000000 0.000000
+Kd 1.0 1.0 1.0 
+Tr 1.0
+Ks 0.000000 0.000000 0.000000
+Ns 3.2

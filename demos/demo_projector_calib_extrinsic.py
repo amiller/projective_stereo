@@ -85,41 +85,48 @@ def draw_decals():
 
 
 def draw_sights(eye):
+    rot = np.eye(4, dtype='f')
+    mag = lambda x : np.sqrt((x*x).sum())
+    norm = lambda x : x / mag(x)
+    rot[:3,2] = norm(-eye)
+    rot[:3,0] = norm(np.cross([0,1,0], rot[:3,2]))
+    rot[:3,1] = norm(np.cross(rot[:3,2], rot[:3,0]))
+
+    def circle(rad, N=20):
+        glBegin(GL_LINE_LOOP)
+        np.tau = np.pi*2
+        for h in np.arange(0, np.tau, np.tau/N):
+            glVertex(rad*np.cos(h), rad*np.sin(h))
+        glEnd()
+        
+    def cross(rad):
+        glRotate(45,0,0,1)
+        glScale(rad, rad, rad)
+        glBegin(GL_LINES)
+        glVertex(-1,0,0); glVertex(1,0,0)
+        glVertex(0,-1,0); glVertex(0,1,0)
+        glEnd()
+
+    rad = 0.05
     with opengl_state():
-        rot = np.eye(4, dtype='f')
-        mag = lambda x : np.sqrt((x*x).sum())
-        norm = lambda x : x / mag(x)
-        rot[:3,2] = norm(-eye)
-        rot[:3,0] = norm(np.cross([0,1,0], rot[:3,2]))
-        rot[:3,1] = norm(np.cross(rot[:3,2], rot[:3,0]))
-
-        def circle(rad, N=20):
-            glBegin(GL_LINE_LOOP)
-            np.tau = np.pi*2
-            for h in np.arange(0, np.tau, np.tau/N):
-                glVertex(rad*np.cos(h), rad*np.sin(h))
-            glEnd()
-
-        def crosses(rad):
-            glRotate(45,0,0,1)
-            glBegin(GL_LINES)
-            glVertex(-rad*2,-rad)
-            glVertex( rad*2,-rad)
-            glVertex(-rad*2, rad)
-            glVertex( rad*2, rad)
-            glVertex(-rad,-rad*2)
-            glVertex(-rad, rad*2)
-            glVertex( rad,-rad*2)
-            glVertex( rad, rad*2)
-            glEnd()
-
-        glMultMatrixf(rot.transpose())
         glColor(1,0,0)
-        rad = 0.05
+        glTranslate(rad,0,0)
+        glMultMatrixf(rot.transpose())
+        cross(rad*0.6)
+
+    rad = 0.05
+    with opengl_state():
+        glColor(1,0,0)
+        glTranslate(-rad,0,0)
+        glMultMatrixf(rot.transpose())
+        cross(rad*0.6)
+
+    with opengl_state():
+        glColor(1,0,0)
+        glMultMatrixf(rot.transpose())
         circle(rad)
         glTranslate(0, 0, -mag(eye)/2)
         circle(rad)
-        crosses(rad*0.6)
         
 def draw_eye(eye):
     with opengl_state():
@@ -187,7 +194,7 @@ window.canvas.SetCurrent()
 projector = DELL_M109S()
 projector.surfaces = surfaces
 projector.calibrate_extrinsic(img_points, obj_points)
-eye = projector.RT[:3,3] + [0.2,0.4,.0]
+eye = projector.RT[:3,3] + [0.2,0.4,.4]
 projector.prepare_stencil()
 
 

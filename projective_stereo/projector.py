@@ -76,7 +76,7 @@ class ViewpointProjectionProgram():
         // p.z = 0.2;
         // p.z = 0; //z_clip;
         // FIXME clipping seems to be off
-        p.z = z_clip/100.;
+        p.z = z_clip/10;
         gl_Position = p;
 
         // Correct for the texture coordinates
@@ -324,6 +324,9 @@ class Projector(Camera):
 
 
 def DELL_M109S():
+    """Default intrinsic calibration parameters taken using the "tape measure"
+    method. Intinsic calibration has not paid off yet.
+    """
     F = 2460.
     W = 1152.
     H = 864.

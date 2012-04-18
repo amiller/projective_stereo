@@ -76,7 +76,7 @@ def draw_decals():
         glVertex(*obj_points[i])
     glEnd()
     with opengl_state():
-        glScale(.05,.05,.05)
+        glScale(.05,.5,.05)
         glBegin(GL_LINES)
         glColor(1,0,0); glVertex(0,0,0); glVertex(1,0,0)
         glColor(0,1,0); glVertex(0,0,0); glVertex(0,1,0)
@@ -85,10 +85,49 @@ def draw_decals():
 
 
 def draw_sights(eye):
-    pass
+    with opengl_state():
+        rot = np.eye(4, dtype='f')
+        mag = lambda x : np.sqrt((x*x).sum())
+        norm = lambda x : x / mag(x)
+        rot[:3,2] = norm(-eye)
+        rot[:3,0] = norm(np.cross([0,1,0], rot[:3,2]))
+        rot[:3,1] = norm(np.cross(rot[:3,2], rot[:3,0]))
 
+        def circle(rad, N=20):
+            glBegin(GL_LINE_LOOP)
+            np.tau = np.pi*2
+            for h in np.arange(0, np.tau, np.tau/N):
+                glVertex(rad*np.cos(h), rad*np.sin(h))
+            glEnd()
 
-def draw_objects(mode='Y'):
+        def crosses(rad):
+            glRotate(45,0,0,1)
+            glBegin(GL_LINES)
+            glVertex(-rad*2,-rad)
+            glVertex( rad*2,-rad)
+            glVertex(-rad*2, rad)
+            glVertex( rad*2, rad)
+            glVertex(-rad,-rad*2)
+            glVertex(-rad, rad*2)
+            glVertex( rad,-rad*2)
+            glVertex( rad, rad*2)
+            glEnd()
+
+        glMultMatrixf(rot.transpose())
+        glColor(1,0,0)
+        rad = 0.05
+        circle(rad)
+        glTranslate(0, 0, -mag(eye)/2)
+        circle(rad)
+        crosses(rad*0.6)
+        
+def draw_eye(eye):
+    with opengl_state():
+        glTranslate(*eye)
+        glColor(1,1,0)
+        glutSolidSphere(.02, 10, 10)
+
+def draw_objects(eye):
     vertices = [[0,0,0],[0,0,1],[0,1,1],[0,1,0],
                 [1,1,0],[1,1,1],[1,0,1],[1,0,0]]
 
@@ -96,26 +135,22 @@ def draw_objects(mode='Y'):
     Y_inds = [0,1, 1,6, 6,7, 7,0]
     Z_inds = [0,3, 3,4, 4,7, 7,0]
 
+    draw_eye(eye)
+    draw_sights(eye)
     with opengl_state():
         glScale(.05,.05,.05)
         glTranslate(-0.5, 0, 0)
         glBegin(GL_LINES)
-
-        # Cube
-        if 1:
-            glColor(0,1,0)
-            for i in cube_inds: glVertex(*vertices[i])
-
-        # Square on Y=0 plane
-        if mode=='Y':
-            glColor(0,1,0)
-            for i in Y_inds: glVertex(*vertices[i])
-
-        if mode=='Z': 
-            glColor(0,0,1)
-            for i in Z_inds: glVertex(*vertices[i])
+        glColor(0,1,0)
+        for i in cube_inds: glVertex(*vertices[i])
         glEnd()
 
+    if 'obj' in globals():
+        with opengl_state():
+            glScale(.1,.1,.1)
+            glRotate(rot_angle, 0, 1, 0)
+            glScale(-1,1,1)
+            obj.draw()
 
 rot_angle = 0.0
 is_animating = False
@@ -125,39 +160,36 @@ def EVT_IDLE(evt):
     if is_animating:
         rot_angle += 0.1
         window.Refresh()
+
         
 @window.event
 def on_draw():
     glClearColor(0,0,0,1)
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+    glEnable(GL_DEPTH_TEST)
 
     global projector
     if not 'projector' in globals(): return
 
+    # Project decals directly to the projector, no eye needed
     with opengl_state():
         projector.setup_projection_matrix()
-        draw_decals()
+        # draw_decals() # Depth is inconsistent between decals and viewpoint
 
-    eye = projector.RT[:3,3] + [.20,0.0,-.2]
+    # For each projection surface plane, we need to do a render
     for plane_index in [0, 1]:
         with projector.viewpoint_projection(eye, plane_index):
-            draw_objects('Z')
-            draw_objects('Y')
-            if 'obj' in globals():
-                with opengl_state():
-                    glEnable(GL_DEPTH_TEST)
-                    glScale(0.1,0.1,0.1)
-                    glRotate(rot_angle, 0, 1, 0)
-                    glScale(-1,-1,-1)
-                    obj.draw()
+            draw_decals()
+            draw_objects(eye)
 
 
 window.canvas.SetCurrent()
 projector = DELL_M109S()
 projector.surfaces = surfaces
 projector.calibrate_extrinsic(img_points, obj_points)
+eye = projector.RT[:3,3] + [0.2,0.4,.0]
 projector.prepare_stencil()
-show_stencil()
+
 
 def calibrate():
     projector.calibrate_extrinsic(img_points, obj_points)
@@ -170,9 +202,7 @@ def post_draw():
     glClearColor(0,0,0,1)
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
     draw_decals()
-    draw_objects()
-    Camera(projector.viewpoint_program.KKe,
-           projector.viewpoint_program.RTe).render_frustum()
+    draw_objects(eye)
     projector.render_frustum()
 
 

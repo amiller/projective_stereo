@@ -9,43 +9,37 @@ from wxpy3d.opengl_state import opengl_state
 import cv
 import wx
 
+
+if not 'window' in globals():
+    if 0: 
+        # Dell M1509
+        window = Window(size=(1152,864), title="DELL_1509S")
+        window.MoveXY(1152,0)
+
+    else: 
+        # Optoma HD33
+        window = Window(size=(500,500), title="OPTOMA_HD33")
+        window.MoveXY(1600,0)
+
+    glutInit()
+    window.ShowFullScreen(True)
+
+    preview = PointWindow(size=(500,500), title="Preview")
+    preview.Move((0,0))
+
+window.canvas.SetCurrent()
+
+
 import projective_stereo.projector; reload(projective_stereo.projector)
-from projective_stereo.projector import DELL_M109S
+from projective_stereo.projector import DELL_M109S, OPTOMA_HD33, load_projector
 
 from projective_stereo.projector import Projector
 from projective_stereo.projector import cv2opengl
 
+from projective_stereo import extrinsic
+reload(extrinsic)
+
 np.set_printoptions(2)
-
-
-"""
-There are 6 known points projector projects. The scenario is 
-a table surface with a 90 degree backdrop. An 8.5"x11" paper
-is folded in half (hamburger style) and placed in the 90 degree
-nook.
-"""
-w, h = (0.2160, 0.2794)
-obj_points = np.array([[-w/2, h/2, 0], [w/2, h/2, 0],
-                       [-w/2, 0,   0], [w/2, 0,   0],
-                       [-w/2, 0, h/2], [w/2, 0, h/2]])
-
-img_points = np.array([
-        (113, 102),
-        (961, 85),
-        (156, 613),
-        (927, 596),
-        (81, 832),
-        (1019, 811)],'f')
-
-surfaces = [
-    [(0,1,0,0), [[[-10,0,-10], [-10,0,10], [10,0,10], [10,0,-10]]]],
-    [(0,0,1,0), [[[-10,-10,0], [-10,10,0], [10,10,0], [10,-10,0]]]],
-    ]
-
-
-def show_stencil():
-    window.canvas.SetCurrent()
-    projector.prepare_stencil()
 
 
 def load_obj(name='gamecube'):
@@ -57,19 +51,13 @@ def load_obj(name='gamecube'):
     window.Refresh()
 
 
-if not 'window' in globals():
-    #window = CameraWindow(size=(1920,1080))
-    window = Window(size=(1152,864), title="Chessboard")
-    glutInit()
-    window.Move((1152,0))
-    window.ShowFullScreen(True)
-
-    preview = PointWindow(size=(500,500), title="Preview")
-    preview.Move((0,0))
-
-
 def draw_decals():
     # Only draw things that are known to be on the projection surfaces
+    w, h = (0.2160, 0.2794)
+    obj_points = np.array([[-w/2, h/2, 0], [w/2, h/2, 0],
+                           [-w/2, 0,   0], [w/2, 0,   0],
+                           [-w/2, 0, h/2], [w/2, 0, h/2]])
+
     glBegin(GL_LINES)
     glColor(1,1,1)
     for i in (0,1, 2,3, 4,5,  0,2, 2,4,  1,3, 3,5):
@@ -190,18 +178,23 @@ def on_draw():
             draw_objects(eye)
 
 
+surfaces = [
+    [(0,1,0,0), [[[-10,0,-10], [-10,0,10], [10,0,10], [10,0,-10]]]],
+    [(0,0,1,0), [[[-10,-10,0], [-10,10,0], [10,10,0], [10,-10,0]]]],
+    ]
+
 window.canvas.SetCurrent()
-projector = DELL_M109S()
+#projector = DELL_M109S()
+#projector = OPTOMA_HD33()
+projector = load_projector()
 projector.surfaces = surfaces
-projector.calibrate_extrinsic(img_points, obj_points)
-eye = projector.RT[:3,3] + [0.2,0.4,.4]
+
+eye = projector.RT[:3,3]# + [0.2,0.4,.4]
 projector.prepare_stencil()
 
 
 def calibrate():
-    projector.calibrate_extrinsic(img_points, obj_points)
-    preview.Refresh()
-    window.Refresh()
+    extrinsic.run_calib()
 
 
 @preview.event
@@ -213,43 +206,8 @@ def post_draw():
     projector.render_frustum()
 
 
-def go():
-    going = True
-    img_points = []
-    try:
-        window.event
-        @window.eventx
-        def EVT_MOUSE_EVENTS(evt):
-            if not going: return
-            if evt.ButtonUp(wx.MOUSE_BTN_LEFT):
-                img_points.append(evt.Position)
-                print len(obj_points), 'points'
-                if len(image_points) == len(obj_points):
-                    print "Done"
-                    going = False
-
-        print """
-There should be 6 points marked on the table and backdrop. 
-Moving the mouse over the projected display, click each of the points
-in order:
-   (left top, on the backdrop),
-   (right top, on the backdrop),
-   (left center, on the crease),
-   (right center, on the crease),
-   (left bottom, on the table),
-   (right bottom, on the table)
-"""
-        while 1:
-            cv.WaitKey(20)
-    finally:
-        going = False
-
 window.Refresh()
 preview.Refresh()
 
-docstring = """
-Extrinsic projector calibration
-"""
 if __name__ == "__main__": 
     pass
-    #print docstring

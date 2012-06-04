@@ -48,6 +48,7 @@ def make_projector(F, size, cx, cy):
     projector.F = F
     projector.cx = cx
     projector.cy = cy
+    projector.size = size
     return projector
 
 
@@ -235,8 +236,13 @@ class ViewpointProjectionProgram():
 
                 yield
             finally:
-                glUseProgram(0)    
+                glUseProgram(0)
 
+
+def load_projector(config='data/newest_calibration/config/projector.npy'):
+    KK, RT = np.load(config)
+    KK, RT = (x.astype('f') for x in (KK,RT))
+    return Projector(KK, RT)
 
 class Projector(Camera):
     def __init__(self, KK, RT=np.eye(4,dtype='f'), surfaces={}):
@@ -293,7 +299,7 @@ class Projector(Camera):
     def calibrate_extrinsic(self, img_points, obj_points):
         KK_CV = self.make_opencv_intrinsic()
         img_p = cv.fromarray(img_points)
-        obj_p = cv.fromarray(obj_points*[1,1,1])
+        obj_p = cv.fromarray(obj_points)
         KK = cv.fromarray(KK_CV)
         dc = cv.fromarray(np.zeros((4,1),'f'))
         rvec = cv.fromarray(np.zeros((3,1),'f'))
@@ -332,4 +338,16 @@ def DELL_M109S():
     H = 864.
     cx = W/2
     cy = H
+    return make_projector(F, (W, H), cx, cy)
+
+
+def OPTOMA_HD33():
+    """Default intrinsic calibration parameters taken using the "tape measure"
+    method. Intinsic calibration has not paid off yet.
+    """
+    F = 3000.
+    W = 1920.
+    H = 1080.
+    cx = W/2
+    cy = 0
     return make_projector(F, (W, H), cx, cy)
